@@ -76,3 +76,27 @@ class DeveloperKey(Base):
     user_id = Column(Integer, ForeignKey("users.id"), nullable=False, unique=True)
     key_hash = Column(String(64), nullable=False, unique=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
+
+
+class DeveloperKey(Base):
+    __tablename__ = "developer_keys"
+
+    id = Column(Integer, primary_key=True, index=True)
+
+    user_id = Column(
+        Integer,
+        ForeignKey("users.id"),
+        nullable=False,
+        unique=True
+    )
+
+    key_hash = Column(
+        String(64),
+        nullable=False,
+        unique=True
+    )
+
+    created_at = Column(
+        DateTime(timezone=True),
+        server_default=func.now()
+    )

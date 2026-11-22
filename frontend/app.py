@@ -10,9 +10,9 @@ from api import (
     submit_report,
     get_reports,
     get_heatmap,
-    get_quietest_times
+    get_quietest_times,
+    verify_developer_key
 )
-
 # --------------------------------------------------
 # PAGE CONFIGURATION
 # --------------------------------------------------

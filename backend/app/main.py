@@ -1,7 +1,7 @@
 from fastapi import FastAPI
-from app.routers import buses, reports, heatmap, users, developer_keys
+
 from app.database import engine, Base
-from app.routers import buses, reports, heatmap, users
+from app.routers import buses, reports, heatmap, users, developer_keys
 
 # Create database tables
 Base.metadata.create_all(bind=engine)
@@ -19,6 +19,7 @@ app.include_router(buses.router)
 app.include_router(reports.router)
 app.include_router(heatmap.router)
 app.include_router(developer_keys.router)
+
 
 @app.get("/")
 def home():
