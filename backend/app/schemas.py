@@ -1,3 +1,4 @@
+
 from pydantic import BaseModel, EmailStr, ConfigDict, Field
 from datetime import datetime
 from enum import Enum
@@ -11,9 +12,16 @@ class CrowdLevel(str, Enum):
     full = "full"
 
 
+# BUS SCHEMAS
+
 class BusCreate(BaseModel):
-    line_number: str
-    route_name: str
+    line_number: str = Field(min_length=1, max_length=20)
+    route_name: str = Field(min_length=2, max_length=150)
+
+
+class BusUpdate(BaseModel):
+    line_number: str = Field(min_length=1, max_length=20)
+    route_name: str = Field(min_length=2, max_length=150)
 
 
 class BusResponse(BaseModel):
@@ -24,8 +32,14 @@ class BusResponse(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
 
+# REPORT SCHEMAS
+
 class ReportCreate(BaseModel):
     bus_id: int
+    crowd_level: CrowdLevel
+
+
+class ReportUpdate(BaseModel):
     crowd_level: CrowdLevel
 
 
@@ -37,8 +51,8 @@ class ReportResponse(BaseModel):
 
     model_config = ConfigDict(from_attributes=True)
 
-from pydantic import BaseModel, EmailStr, ConfigDict, Field
 
+# USER SCHEMAS
 
 class UserCreate(BaseModel):
     username: str = Field(min_length=3, max_length=50)
@@ -49,6 +63,7 @@ class UserCreate(BaseModel):
 class UserLogin(BaseModel):
     email: EmailStr
     password: str
+
 
 class UserResponse(BaseModel):
     id: int

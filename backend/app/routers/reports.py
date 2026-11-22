@@ -3,7 +3,6 @@ from sqlalchemy.orm import Session
 
 from app.database import get_db
 from app import crud, schemas, models
-
 from app.auth.security import get_current_user
 from app.models import User
 
@@ -16,7 +15,8 @@ router = APIRouter(
 @router.post("/", response_model=schemas.ReportResponse)
 def submit_report(
     report: schemas.ReportCreate,
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
 ):
     bus = db.query(models.Bus).filter(
         models.Bus.id == report.bus_id
@@ -28,7 +28,7 @@ def submit_report(
             detail="Bus line not found"
         )
 
-    return crud.create_report(db, report)
+    return crud.create_report(db, report, current_user.id)
 
 
 @router.get("/", response_model=list[schemas.ReportResponse])
