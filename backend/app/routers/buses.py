@@ -1,8 +1,11 @@
+
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 
 from app.database import get_db
-from app import crud, schemas
+from app import crud, schemas, models
+from app.auth.security import get_current_user
+from app.models import User
 
 router = APIRouter(
     prefix="/buses",
@@ -13,10 +16,11 @@ router = APIRouter(
 @router.post("/", response_model=schemas.BusResponse)
 def add_bus(
     bus: schemas.BusCreate,
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
 ):
-    existing = db.query(crud.models.Bus).filter(
-        crud.models.Bus.line_number == bus.line_number
+    existing = db.query(models.Bus).filter(
+        models.Bus.line_number == bus.line_number
     ).first()
 
     if existing:
@@ -31,30 +35,3 @@ def add_bus(
 @router.get("/", response_model=list[schemas.BusResponse])
 def list_buses(db: Session = Depends(get_db)):
     return crud.get_buses(db)
-
-
-@router.put("/{bus_id}", response_model=schemas.BusResponse)
-def edit_bus(
-    bus_id: int,
-    bus: schemas.BusUpdate,
-    db: Session = Depends(get_db)
-):
-    updated = crud.update_bus(db, bus_id, bus)
-
-    if not updated:
-        raise HTTPException(status_code=404, detail="Bus not found")
-
-    return updated
-
-
-@router.delete("/{bus_id}")
-def remove_bus(
-    bus_id: int,
-    db: Session = Depends(get_db)
-):
-    deleted = crud.delete_bus(db, bus_id)
-
-    if not deleted:
-        raise HTTPException(status_code=404, detail="Bus not found")
-
-    return {"message": "Bus deleted successfully"}

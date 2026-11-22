@@ -8,17 +8,22 @@ from api import (
     login_user,
     get_profile,
     get_buses,
+    add_bus,
     submit_report,
     get_reports,
+    get_my_reports,
+    update_report,
+    delete_report,
     get_heatmap,
     get_quietest_times,
     verify_developer_key,
     generate_developer_key
 )
 
-# --------------------------------------------------
+
+# ==========================================
 # PAGE CONFIGURATION
-# --------------------------------------------------
+# ==========================================
 
 st.set_page_config(
     page_title="Bus Crowd Meter",
@@ -27,9 +32,10 @@ st.set_page_config(
     initial_sidebar_state="expanded"
 )
 
-# --------------------------------------------------
-# FUTURISTIC DESIGN
-# --------------------------------------------------
+
+# ==========================================
+# DESIGN
+# ==========================================
 
 st.markdown("""
 <style>
@@ -63,11 +69,6 @@ p, label, .stMarkdown {
     border-radius: 10px !important;
 }
 
-.stTextInput input:focus {
-    border: 1px solid #22D3EE !important;
-    box-shadow: 0 0 10px #087FAD !important;
-}
-
 .stButton button,
 .stFormSubmitButton button {
     background: linear-gradient(90deg, #087FAD, #155EAA);
@@ -85,30 +86,15 @@ p, label, .stMarkdown {
     transform: translateY(-2px);
 }
 
-.stTabs [data-baseweb="tab"] {
-    color: #A5D5E8;
-    font-weight: 600;
-}
-
-.stTabs [aria-selected="true"] {
-    color: #22D3EE !important;
-    border-bottom: 2px solid #22D3EE !important;
-}
-
 div[data-testid="stMetric"] {
     background: linear-gradient(145deg, #102A40, #0A1929);
     border: 1px solid #176080;
     border-radius: 14px;
     padding: 20px;
-    box-shadow: 0 0 12px rgba(34,211,238,.08);
 }
 
 div[data-testid="stMetricValue"] {
     color: #22D3EE !important;
-}
-
-div[data-testid="stMetricLabel"] {
-    color: #A5D5E8 !important;
 }
 
 section[data-testid="stSidebar"] {
@@ -123,26 +109,25 @@ hr {
 """, unsafe_allow_html=True)
 
 
-# --------------------------------------------------
+# ==========================================
 # SESSION STATE
-# --------------------------------------------------
+# ==========================================
 
-if "token" not in st.session_state:
-    st.session_state.token = None
+defaults = {
+    "token": None,
+    "username": "",
+    "page": "Dashboard",
+    "new_developer_key": None
+}
 
-if "username" not in st.session_state:
-    st.session_state.username = ""
-
-if "page" not in st.session_state:
-    st.session_state.page = "Dashboard"
-
-if "new_developer_key" not in st.session_state:
-    st.session_state.new_developer_key = None
+for key, value in defaults.items():
+    if key not in st.session_state:
+        st.session_state[key] = value
 
 
-# --------------------------------------------------
-# HELPER FUNCTIONS
-# --------------------------------------------------
+# ==========================================
+# HELPERS
+# ==========================================
 
 def show_error(response):
     try:
@@ -157,25 +142,11 @@ def get_data(response):
     if response is None:
         return None
 
-    if response.status_code == 200:
+    if response.status_code in [200, 201]:
         return response.json()
 
     show_error(response)
     return None
-
-
-def make_dataframe(data):
-    if isinstance(data, list):
-        return pd.DataFrame(data)
-
-    if isinstance(data, dict):
-        for value in data.values():
-            if isinstance(value, list):
-                return pd.DataFrame(value)
-
-        return pd.DataFrame([data])
-
-    return pd.DataFrame()
 
 
 def show_header():
@@ -200,9 +171,35 @@ def show_header():
     """, unsafe_allow_html=True)
 
 
-# --------------------------------------------------
+def bus_label(bus):
+    return (
+        f"Line {bus['line_number']} - {bus['route_name']}"
+    )
+
+
+def load_buses():
+    response = get_buses()
+    data = get_data(response)
+
+    if isinstance(data, list):
+        return data
+
+    return []
+
+
+def load_reports():
+    response = get_reports()
+    data = get_data(response)
+
+    if isinstance(data, list):
+        return data
+
+    return []
+
+
+# ==========================================
 # LOGIN AND REGISTRATION
-# --------------------------------------------------
+# ==========================================
 
 def authentication_page():
 
@@ -210,7 +207,9 @@ def authentication_page():
     st.markdown("---")
 
     st.markdown(
-        "<h2 style='text-align:center;'>Welcome to the future of public transport</h2>",
+        "<h2 style='text-align:center;'>"
+        "Welcome to the future of public transport"
+        "</h2>",
         unsafe_allow_html=True
     )
 
@@ -218,7 +217,6 @@ def authentication_page():
         ["🔐 Login", "✨ Create Account"]
     )
 
-    # LOGIN
     with login_tab:
 
         st.subheader("Access your account")
@@ -226,7 +224,10 @@ def authentication_page():
         with st.form("login_form"):
 
             email = st.text_input("Email")
-            password = st.text_input("Password", type="password")
+            password = st.text_input(
+                "Password",
+                type="password"
+            )
 
             login_button = st.form_submit_button(
                 "Login",
@@ -245,7 +246,11 @@ def authentication_page():
                     if response.status_code == 200:
 
                         result = response.json()
-                        token = result.get("access_token") or result.get("token")
+
+                        token = (
+                            result.get("access_token")
+                            or result.get("token")
+                        )
 
                         if token:
 
@@ -273,10 +278,6 @@ def authentication_page():
                 except requests.RequestException as error:
                     st.error(f"Backend connection error: {error}")
 
-                except Exception as error:
-                    st.error(f"Login error: {error}")
-
-    # REGISTER
     with register_tab:
 
         st.subheader("Create a new account")
@@ -284,7 +285,10 @@ def authentication_page():
         with st.form("register_form"):
 
             username = st.text_input("Username")
-            email = st.text_input("Email", key="register_email")
+            email = st.text_input(
+                "Email",
+                key="register_email"
+            )
             password = st.text_input(
                 "Password",
                 type="password",
@@ -303,11 +307,15 @@ def authentication_page():
 
             else:
                 try:
-                    response = register_user(username, email, password)
+                    response = register_user(
+                        username,
+                        email,
+                        password
+                    )
 
                     if response.status_code in [200, 201]:
                         st.success(
-                            "Account created successfully! You can now log in."
+                            "Account created! You can now log in."
                         )
                     else:
                         show_error(response)
@@ -315,13 +323,10 @@ def authentication_page():
                 except requests.RequestException as error:
                     st.error(f"Backend connection error: {error}")
 
-                except Exception as error:
-                    st.error(f"Registration error: {error}")
 
-
-# --------------------------------------------------
+# ==========================================
 # SIDEBAR
-# --------------------------------------------------
+# ==========================================
 
 def show_sidebar():
 
@@ -331,7 +336,9 @@ def show_sidebar():
     )
 
     st.sidebar.markdown("---")
-    st.sidebar.write(f"Welcome, **{st.session_state.username}**")
+    st.sidebar.write(
+        f"Welcome, **{st.session_state.username}**"
+    )
 
     pages = [
         "Dashboard",
@@ -356,57 +363,39 @@ def show_sidebar():
 
     st.sidebar.markdown("---")
 
-    if st.sidebar.button("🚪 Logout", use_container_width=True):
-
+    if st.sidebar.button(
+        "🚪 Logout",
+        use_container_width=True
+    ):
         st.session_state.token = None
         st.session_state.username = ""
         st.session_state.page = "Dashboard"
         st.session_state.new_developer_key = None
-
         st.rerun()
 
 
-# --------------------------------------------------
+# ==========================================
 # DASHBOARD
-# --------------------------------------------------
+# ==========================================
 
 def dashboard_page():
 
     st.title("📊 Dashboard")
-    st.write("Your real-time public transportation overview.")
+    st.write("Your public transportation overview.")
 
     col1, col2, col3 = st.columns(3)
 
     try:
-        buses_response = get_buses()
-        buses = get_data(buses_response)
+        buses = load_buses()
+        reports = load_reports()
 
-        if buses is not None:
-            bus_list = buses if isinstance(buses, list) else buses.get("buses", [])
-            col1.metric("🚌 Total Buses", len(bus_list))
-        else:
-            col1.metric("🚌 Total Buses", "N/A")
+        col1.metric("🚌 Total Bus Lines", len(buses))
+        col2.metric("📋 Crowd Reports", len(reports))
+        col3.metric("📡 System Status", "ONLINE")
 
-    except Exception:
-        col1.metric("🚌 Total Buses", "N/A")
-
-    try:
-        reports_response = get_reports()
-        reports = get_data(reports_response)
-
-        if reports is not None:
-            report_list = (
-                reports if isinstance(reports, list)
-                else reports.get("reports", [])
-            )
-            col2.metric("📋 Crowd Reports", len(report_list))
-        else:
-            col2.metric("📋 Crowd Reports", "N/A")
-
-    except Exception:
-        col2.metric("📋 Crowd Reports", "N/A")
-
-    col3.metric("📡 System Status", "ONLINE")
+    except requests.RequestException:
+        st.error("Could not connect to the backend.")
+        return
 
     st.markdown("---")
     st.subheader("Welcome to Bus Crowd Meter")
@@ -414,103 +403,120 @@ def dashboard_page():
     st.write("""
     Use this platform to:
 
-    - View available buses.
+    - View available bus lines.
+    - Add new bus lines.
     - Report how crowded a bus is.
-    - Explore submitted crowd reports.
-    - View crowd information on the heatmap.
-    - Find quieter travel times.
+    - View crowd reports.
+    - Edit or delete your own reports.
+    - Explore crowd information and quieter travel times.
     """)
 
 
-# --------------------------------------------------
-# BUSES
-# --------------------------------------------------
+# ==========================================
+# BUS LINES
+# ==========================================
 
 def buses_page():
 
-    st.title("🚌 Available Buses")
+    st.title("🚌 Bus Lines")
+    st.write("View existing bus lines or add a new one.")
 
-    if st.button("🔄 Refresh Buses"):
+    st.subheader("➕ Add a Bus Line")
+
+    with st.form("add_bus_form"):
+
+        line_number = st.text_input(
+            "Bus line number",
+            placeholder="Example: 4"
+        )
+
+        route_name = st.text_input(
+            "Route name",
+            placeholder="Example: City Center - University"
+        )
+
+        add_button = st.form_submit_button(
+            "Add Bus Line",
+            use_container_width=True
+        )
+
+    if add_button:
+
+        if not line_number.strip() or not route_name.strip():
+            st.warning("Please complete both fields.")
+
+        else:
+            try:
+                response = add_bus(
+                    line_number.strip(),
+                    route_name.strip(),
+                    st.session_state.token
+                )
+
+                if response.status_code in [200, 201]:
+                    st.success("Bus line added successfully!")
+                    st.rerun()
+                else:
+                    show_error(response)
+
+            except requests.RequestException as error:
+                st.error(f"Backend connection error: {error}")
+
+    st.markdown("---")
+    st.subheader("Available Bus Lines")
+
+    if st.button("🔄 Refresh Bus Lines"):
         st.rerun()
 
     try:
-        response = get_buses()
-        data = get_data(response)
+        buses = load_buses()
 
-        if data is not None:
-
-            bus_list = (
-                data if isinstance(data, list)
-                else data.get("buses", [])
+        if buses:
+            st.dataframe(
+                pd.DataFrame(buses),
+                use_container_width=True,
+                hide_index=True
             )
+        else:
+            st.info("No bus lines are currently available.")
 
-            if bus_list:
-                st.dataframe(
-                    make_dataframe(bus_list),
-                    use_container_width=True,
-                    hide_index=True
-                )
-            else:
-                st.info("No buses are currently available.")
-
-    except Exception as error:
-        st.error(f"Error loading buses: {error}")
+    except requests.RequestException as error:
+        st.error(f"Could not load bus lines: {error}")
 
 
-# --------------------------------------------------
-# SUBMIT CROWD REPORT
-# --------------------------------------------------
+# ==========================================
+# SUBMIT REPORT
+# ==========================================
 
 def submit_report_page():
 
     st.title("📢 Submit Crowd Report")
-    st.write("Help other passengers by reporting bus crowd levels.")
+    st.write(
+        "Help other passengers by reporting bus crowd levels."
+    )
 
     try:
-        buses_response = get_buses()
-        buses_data = get_data(buses_response)
+        buses = load_buses()
 
-        if buses_data is None:
+        if not buses:
+            st.warning("No bus lines available. Add a bus line first.")
             return
 
-        bus_list = (
-            buses_data if isinstance(buses_data, list)
-            else buses_data.get("buses", [])
-        )
-
-        if not bus_list:
-            st.warning("No buses available for reporting.")
-            return
-
-        bus_options = {}
-
-        for bus in bus_list:
-
-            bus_id = bus.get("id") or bus.get("bus_id")
-
-            bus_name = (
-                bus.get("name")
-                or bus.get("bus_number")
-                or f"Bus {bus_id}"
-            )
-
-            if bus_id is not None:
-                bus_options[bus_name] = bus_id
-
-        if not bus_options:
-            st.warning("Could not find bus IDs in the backend response.")
-            return
+        bus_options = {
+            bus_label(bus): bus["id"]
+            for bus in buses
+        }
 
         with st.form("report_form"):
 
             selected_bus = st.selectbox(
-                "Select a bus",
+                "Select a bus line",
                 list(bus_options.keys())
             )
 
             crowd_level = st.selectbox(
                 "How crowded is the bus?",
-                ["Low", "Medium", "High", "Full"]
+                ["empty", "low", "medium", "high", "full"]
             )
 
             submit_button = st.form_submit_button(
@@ -527,52 +533,152 @@ def submit_report_page():
             )
 
             if response.status_code in [200, 201]:
-                st.success("Your crowd report was submitted successfully!")
+                st.success(
+                    "Your crowd report was submitted successfully!"
+                )
             else:
                 show_error(response)
 
-    except Exception as error:
-        st.error(f"Error submitting report: {error}")
+    except requests.RequestException as error:
+        st.error(f"Backend connection error: {error}")
 
 
-# --------------------------------------------------
+# ==========================================
 # REPORTS
-# --------------------------------------------------
+# ==========================================
 
 def reports_page():
 
     st.title("📋 Crowd Reports")
 
-    if st.button("🔄 Refresh Reports"):
-        st.rerun()
+    all_tab, my_tab = st.tabs(
+        ["🌍 All Reports", "👤 My Reports"]
+    )
 
-    try:
-        response = get_reports()
-        data = get_data(response)
+    # ALL REPORTS
 
-        if data is not None:
+    with all_tab:
 
-            report_list = (
-                data if isinstance(data, list)
-                else data.get("reports", [])
-            )
+        st.subheader("All submitted reports")
 
-            if report_list:
+        try:
+            reports = load_reports()
+
+            if reports:
                 st.dataframe(
-                    make_dataframe(report_list),
+                    pd.DataFrame(reports),
                     use_container_width=True,
                     hide_index=True
                 )
             else:
                 st.info("No reports have been submitted yet.")
 
-    except Exception as error:
-        st.error(f"Error loading reports: {error}")
+        except requests.RequestException as error:
+            st.error(f"Could not load reports: {error}")
+
+    # MY REPORTS
+
+    with my_tab:
+
+        st.subheader("Manage your reports")
+
+        try:
+            response = get_my_reports(
+                st.session_state.token
+            )
+
+            my_reports = get_data(response)
+
+            if my_reports is None:
+                return
+
+            if not my_reports:
+                st.info("You haven't submitted any reports yet.")
+                return
+
+            st.dataframe(
+                pd.DataFrame(my_reports),
+                use_container_width=True,
+                hide_index=True
+            )
+
+            st.markdown("---")
+            st.subheader("Edit or Delete a Report")
+
+            report_options = {
+                f"Report #{report['id']} - "
+                f"{report['crowd_level']} "
+                f"(Bus ID: {report['bus_id']})": report
+                for report in my_reports
+            }
+
+            selected_label = st.selectbox(
+                "Select your report",
+                list(report_options.keys())
+            )
+
+            selected_report = report_options[selected_label]
+            report_id = selected_report["id"]
+
+            st.write(
+                f"Current crowd level: "
+                f"**{selected_report['crowd_level']}**"
+            )
+
+            with st.form(f"edit_report_{report_id}"):
+
+                new_level = st.selectbox(
+                    "New crowd level",
+                    ["empty", "low", "medium", "high", "full"],
+                    index=[
+                        "empty", "low", "medium", "high", "full"
+                    ].index(selected_report["crowd_level"])
+                )
+
+                edit_button = st.form_submit_button(
+                    "Save Changes",
+                    use_container_width=True
+                )
+
+            if edit_button:
+
+                update_response = update_report(
+                    report_id,
+                    new_level,
+                    st.session_state.token
+                )
+
+                if update_response.status_code == 200:
+                    st.success("Report updated successfully!")
+                    st.rerun()
+                else:
+                    show_error(update_response)
+
+            st.markdown("---")
+
+            if st.button(
+                f"🗑️ Delete Report #{report_id}",
+                key=f"delete_{report_id}"
+            ):
+
+                delete_response = delete_report(
+                    report_id,
+                    st.session_state.token
+                )
+
+                if delete_response.status_code == 200:
+                    st.success("Report deleted successfully!")
+                    st.rerun()
+                else:
+                    show_error(delete_response)
+
+        except requests.RequestException as error:
+            st.error(f"Could not manage reports: {error}")
 
 
-# --------------------------------------------------
+# ==========================================
 # HEATMAP
-# --------------------------------------------------
+# ==========================================
 
 def heatmap_page():
 
@@ -584,67 +690,57 @@ def heatmap_page():
         data = get_data(response)
 
         if data is not None:
-
-            st.subheader("Crowd Information")
-
             if isinstance(data, list):
                 st.dataframe(
-                    make_dataframe(data),
+                    pd.DataFrame(data),
                     use_container_width=True,
                     hide_index=True
                 )
             else:
                 st.json(data)
 
-    except Exception as error:
+    except requests.RequestException as error:
         st.error(f"Error loading heatmap: {error}")
 
 
-# --------------------------------------------------
+# ==========================================
 # QUIETEST TIMES
-# --------------------------------------------------
+# ==========================================
 
 def quietest_times_page():
 
     st.title("🕒 Quietest Travel Times")
-    st.write("Discover the less crowded times to travel.")
+    st.write("Discover less crowded times to travel.")
 
     try:
         response = get_quietest_times()
         data = get_data(response)
 
         if data is not None:
-
             if isinstance(data, list):
                 st.dataframe(
-                    make_dataframe(data),
+                    pd.DataFrame(data),
                     use_container_width=True,
                     hide_index=True
                 )
             else:
                 st.json(data)
 
-    except Exception as error:
+    except requests.RequestException as error:
         st.error(f"Error loading quietest times: {error}")
 
 
-# --------------------------------------------------
+# ==========================================
 # DEVELOPER KEY
-# --------------------------------------------------
-
+# ==========================================
 
 def developer_key_page():
 
     st.title("🔑 Developer Key")
     st.write("Generate and manage your developer access key.")
 
-    token = st.session_state.get("token")
+    token = st.session_state.token
 
-    if not token:
-        st.warning("Please log in first.")
-        return
-
-    # GENERATE KEY
     st.subheader("Generate Developer Key")
 
     if st.button("🔑 Generate Developer Key"):
@@ -661,44 +757,33 @@ def developer_key_page():
                     st.session_state.new_developer_key = key
                     st.success("Developer key generated successfully!")
                 else:
-                    st.error("The server did not return a developer key.")
+                    st.error("No developer key was returned.")
 
             else:
                 show_error(response)
 
         except requests.RequestException as error:
-            st.error(f"Could not connect to backend: {error}")
+            st.error(f"Backend connection error: {error}")
 
-        except Exception as error:
-            st.error(f"Error generating key: {error}")
-
-    # DISPLAY GENERATED KEY
-    key = st.session_state.get("new_developer_key")
+    key = st.session_state.new_developer_key
 
     if key:
         st.subheader("Your Developer Key")
         st.code(key, language=None)
-
-        st.warning(
-            "Save this key somewhere safe. "
-            "The original key may only be shown when it is generated."
-        )
+        st.warning("Save this key somewhere safe.")
 
     st.markdown("---")
-
-    # VERIFY KEY
     st.subheader("Verify Developer Key")
 
     developer_key = st.text_input(
         "Enter Developer Key",
-        type="password",
-        placeholder="Enter your developer key..."
+        type="password"
     )
 
     if st.button("Verify Developer Key"):
 
         if not developer_key:
-            st.error("Please enter your developer key.")
+            st.warning("Please enter your developer key.")
 
         else:
             try:
@@ -712,7 +797,7 @@ def developer_key_page():
                     result = response.json()
 
                     if result.get("valid"):
-                        st.success("Developer key verified successfully!")
+                        st.success("Developer key verified!")
                     else:
                         st.error(
                             result.get(
@@ -727,44 +812,30 @@ def developer_key_page():
             except requests.RequestException as error:
                 st.error(f"Backend connection error: {error}")
 
-            except Exception as error:
-                st.error(f"Verification error: {error}")
 
-
-# --------------------------------------------------
-# MAIN APPLICATION
-# --------------------------------------------------
+# ==========================================
+# MAIN
+# ==========================================
 
 def main():
 
     if not st.session_state.token:
-
         authentication_page()
+        return
 
-    else:
+    show_sidebar()
 
-        show_sidebar()
+    pages = {
+        "Dashboard": dashboard_page,
+        "Buses": buses_page,
+        "Submit Report": submit_report_page,
+        "Reports": reports_page,
+        "Heatmap": heatmap_page,
+        "Quietest Times": quietest_times_page,
+        "Developer Key": developer_key_page
+    }
 
-        if st.session_state.page == "Dashboard":
-            dashboard_page()
-
-        elif st.session_state.page == "Buses":
-            buses_page()
-
-        elif st.session_state.page == "Submit Report":
-            submit_report_page()
-
-        elif st.session_state.page == "Reports":
-            reports_page()
-
-        elif st.session_state.page == "Heatmap":
-            heatmap_page()
-
-        elif st.session_state.page == "Quietest Times":
-            quietest_times_page()
-
-        elif st.session_state.page == "Developer Key":
-            developer_key_page()
+    pages[st.session_state.page]()
 
 
 if __name__ == "__main__":

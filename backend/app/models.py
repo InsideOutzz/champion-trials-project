@@ -1,10 +1,7 @@
+
 from sqlalchemy import (
-    Column,
-    Integer,
-    String,
-    DateTime,
-    ForeignKey,
-    Enum
+    Column, Integer, String, DateTime,
+    ForeignKey, Enum
 )
 from sqlalchemy.sql import func
 from sqlalchemy.orm import relationship

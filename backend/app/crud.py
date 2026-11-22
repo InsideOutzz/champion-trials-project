@@ -3,9 +3,7 @@ from sqlalchemy.orm import Session
 from app import models, schemas
 
 
-# =========================
 # BUS CRUD
-# =========================
 
 def create_bus(db: Session, bus: schemas.BusCreate):
     db_bus = models.Bus(**bus.model_dump())
@@ -18,7 +16,9 @@ def create_bus(db: Session, bus: schemas.BusCreate):
 
 
 def get_buses(db: Session):
-    return db.query(models.Bus).all()
+    return db.query(models.Bus).order_by(
+        models.Bus.line_number
+    ).all()
 
 
 def get_bus(db: Session, bus_id: int):
@@ -27,38 +27,7 @@ def get_bus(db: Session, bus_id: int):
     ).first()
 
 
-def update_bus(db: Session, bus_id: int, bus_data: schemas.BusUpdate):
-    db_bus = get_bus(db, bus_id)
-
-    if db_bus:
-        db_bus.line_number = bus_data.line_number
-        db_bus.route_name = bus_data.route_name
-
-        db.commit()
-        db.refresh(db_bus)
-
-    return db_bus
-
-
-def delete_bus(db: Session, bus_id: int):
-    db_bus = get_bus(db, bus_id)
-
-    if not db_bus:
-        return False
-
-    # Do not delete a bus that has reports.
-    if db_bus.reports:
-        return False
-
-    db.delete(db_bus)
-    db.commit()
-
-    return True
-
-
-# =========================
 # REPORT CRUD
-# =========================
 
 def create_report(
     db: Session,
@@ -67,7 +36,7 @@ def create_report(
 ):
     db_report = models.CrowdReport(
         bus_id=report.bus_id,
-        crowd_level=report.crowd_level,
+        crowd_level=models.CrowdLevel(report.crowd_level.value),
         user_id=user_id
     )
 
@@ -119,7 +88,7 @@ def update_report(
     if not report:
         return None
 
-    report.crowd_level = crowd_level
+    report.crowd_level = models.CrowdLevel(crowd_level.value)
 
     db.commit()
     db.refresh(report)
@@ -127,7 +96,11 @@ def update_report(
     return report
 
 
-def delete_report(db: Session, report_id: int, user_id: int):
+def delete_report(
+    db: Session,
+    report_id: int,
+    user_id: int
+):
     report = db.query(models.CrowdReport).filter(
         models.CrowdReport.id == report_id,
         models.CrowdReport.user_id == user_id
