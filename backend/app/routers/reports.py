@@ -4,6 +4,9 @@ from sqlalchemy.orm import Session
 from app.database import get_db
 from app import crud, schemas, models
 
+from app.auth.security import get_current_user
+from app.models import User
+
 router = APIRouter(
     prefix="/reports",
     tags=["Crowd Reports"]

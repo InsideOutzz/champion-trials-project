@@ -40,3 +40,39 @@ class CrowdReport(Base):
     )
 
     bus = relationship("Bus", back_populates="reports")
+
+class User(Base):
+    __tablename__ = "users"
+
+    id = Column(Integer, primary_key=True, index=True)
+
+    username = Column(
+        String(50),
+        unique=True,
+        nullable=False
+    )
+
+    email = Column(
+        String(255),
+        unique=True,
+        nullable=False,
+        index=True
+    )
+
+    hashed_password = Column(
+        String(255),
+        nullable=False
+    )
+
+    created_at = Column(
+        DateTime(timezone=True),
+        server_default=func.now()
+    )
+
+class DeveloperKey(Base):
+    __tablename__ = "developer_keys"
+
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=False, unique=True)
+    key_hash = Column(String(64), nullable=False, unique=True)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())

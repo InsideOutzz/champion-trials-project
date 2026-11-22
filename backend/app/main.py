@@ -1,20 +1,24 @@
 from fastapi import FastAPI
-
+from app.routers import buses, reports, heatmap, users, developer_keys
 from app.database import engine, Base
-from app.routers import buses, reports, heatmap
+from app.routers import buses, reports, heatmap, users
 
+# Create database tables
 Base.metadata.create_all(bind=engine)
 
+# Initialize API
 app = FastAPI(
     title="Bus Crowd Meter API",
-    description="API for reporting and analyzing bus crowd levels",
-    version="1.0.0"
+    description="Bus crowd reporting and user authentication",
+    version="2.0.0"
 )
 
+# Register routers
+app.include_router(users.router)
 app.include_router(buses.router)
 app.include_router(reports.router)
 app.include_router(heatmap.router)
-
+app.include_router(developer_keys.router)
 
 @app.get("/")
 def home():
