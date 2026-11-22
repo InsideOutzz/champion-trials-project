@@ -1,8 +1,11 @@
+
 from sqlalchemy.orm import Session
 from app import models, schemas
 
 
+# =========================
 # BUS CRUD
+# =========================
 
 def create_bus(db: Session, bus: schemas.BusCreate):
     db_bus = models.Bus(**bus.model_dump())
@@ -40,17 +43,28 @@ def update_bus(db: Session, bus_id: int, bus_data: schemas.BusUpdate):
 def delete_bus(db: Session, bus_id: int):
     db_bus = get_bus(db, bus_id)
 
-    if db_bus:
-        db.delete(db_bus)
-        db.commit()
-        return True
+    if not db_bus:
+        return False
 
-    return False
+    # Do not delete a bus that has reports.
+    if db_bus.reports:
+        return False
+
+    db.delete(db_bus)
+    db.commit()
+
+    return True
 
 
+# =========================
 # REPORT CRUD
+# =========================
 
-def create_report(db: Session, report: schemas.ReportCreate, user_id: int):
+def create_report(
+    db: Session,
+    report: schemas.ReportCreate,
+    user_id: int
+):
     db_report = models.CrowdReport(
         bus_id=report.bus_id,
         crowd_level=report.crowd_level,
@@ -83,27 +97,46 @@ def get_report(db: Session, report_id: int):
     ).first()
 
 
+def get_user_reports(db: Session, user_id: int):
+    return db.query(models.CrowdReport).filter(
+        models.CrowdReport.user_id == user_id
+    ).order_by(
+        models.CrowdReport.reported_at.desc()
+    ).all()
+
+
 def update_report(
     db: Session,
     report_id: int,
-    crowd_level: schemas.CrowdLevel
+    crowd_level: schemas.CrowdLevel,
+    user_id: int
 ):
-    report = get_report(db, report_id)
+    report = db.query(models.CrowdReport).filter(
+        models.CrowdReport.id == report_id,
+        models.CrowdReport.user_id == user_id
+    ).first()
 
-    if report:
-        report.crowd_level = crowd_level
-        db.commit()
-        db.refresh(report)
+    if not report:
+        return None
+
+    report.crowd_level = crowd_level
+
+    db.commit()
+    db.refresh(report)
 
     return report
 
 
-def delete_report(db: Session, report_id: int):
-    report = get_report(db, report_id)
+def delete_report(db: Session, report_id: int, user_id: int):
+    report = db.query(models.CrowdReport).filter(
+        models.CrowdReport.id == report_id,
+        models.CrowdReport.user_id == user_id
+    ).first()
 
-    if report:
-        db.delete(report)
-        db.commit()
-        return True
+    if not report:
+        return False
 
-    return False
+    db.delete(report)
+    db.commit()
+
+    return True

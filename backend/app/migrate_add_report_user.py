@@ -1,4 +1,19 @@
- columns = [
+from sqlalchemy import inspect, text
+from app.database import engine
+
+
+def migrate():
+    inspector = inspect(engine)
+
+    tables = inspector.get_table_names()
+
+    if "crowd_reports" not in tables:
+        raise RuntimeError("crowd_reports table not found.")
+
+    if "users" not in tables:
+        raise RuntimeError("users table not found.")
+
+    columns = [
         column["name"]
         for column in inspector.get_columns("crowd_reports")
     ]
