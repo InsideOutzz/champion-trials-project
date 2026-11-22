@@ -1,4 +1,4 @@
-from pydantic import BaseModel, EmailStr, ConfigDict, Fiellfrom pydantic
+from pydantic import BaseModel, EmailStr, ConfigDict, Field
 from datetime import datetime
 from enum import Enum
 

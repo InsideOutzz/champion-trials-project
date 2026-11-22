@@ -2,6 +2,13 @@ import requests
 
 API_URL = "http://127.0.0.1:8000"
 
+def generate_developer_key(token):
+    return requests.post(
+        f"{API_URL}/developer-keys/",
+        headers={"Authorization": f"Bearer {token}"},
+        timeout=10
+    )
+
 
 def register_user(username, email, password):
     return requests.post(
@@ -77,6 +84,13 @@ def verify_developer_key(key, token):
     return requests.post(
         f"{API_URL}/developer-keys/verify",
         json={"key": key},
+        headers={"Authorization": f"Bearer {token}"},
+        timeout=10
+    )
+
+def generate_developer_key(token):
+    return requests.post(
+        f"{API_URL}/developer-keys/",
         headers={"Authorization": f"Bearer {token}"},
         timeout=10
     )

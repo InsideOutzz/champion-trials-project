@@ -1,6 +1,7 @@
 
 import streamlit as st
 import pandas as pd
+import requests
 
 from api import (
     register_user,
@@ -11,8 +12,10 @@ from api import (
     get_reports,
     get_heatmap,
     get_quietest_times,
-    verify_developer_key
+    verify_developer_key,
+    generate_developer_key
 )
+
 # --------------------------------------------------
 # PAGE CONFIGURATION
 # --------------------------------------------------
@@ -133,6 +136,9 @@ if "username" not in st.session_state:
 if "page" not in st.session_state:
     st.session_state.page = "Dashboard"
 
+if "new_developer_key" not in st.session_state:
+    st.session_state.new_developer_key = None
+
 
 # --------------------------------------------------
 # HELPER FUNCTIONS
@@ -163,7 +169,7 @@ def make_dataframe(data):
         return pd.DataFrame(data)
 
     if isinstance(data, dict):
-        for key, value in data.items():
+        for value in data.values():
             if isinstance(value, list):
                 return pd.DataFrame(value)
 
@@ -201,7 +207,6 @@ def show_header():
 def authentication_page():
 
     show_header()
-
     st.markdown("---")
 
     st.markdown(
@@ -209,7 +214,9 @@ def authentication_page():
         unsafe_allow_html=True
     )
 
-    login_tab, register_tab = st.tabs(["🔐 Login", "✨ Create Account"])
+    login_tab, register_tab = st.tabs(
+        ["🔐 Login", "✨ Create Account"]
+    )
 
     # LOGIN
     with login_tab:
@@ -238,10 +245,10 @@ def authentication_page():
                     if response.status_code == 200:
 
                         result = response.json()
-
                         token = result.get("access_token") or result.get("token")
 
                         if token:
+
                             st.session_state.token = token
 
                             profile_response = get_profile(token)
@@ -258,16 +265,16 @@ def authentication_page():
                             st.rerun()
 
                         else:
-                            st.error(
-                                "Login succeeded, but no access token was returned. "
-                                "Check your backend login response."
-                            )
+                            st.error("No access token was returned.")
 
                     else:
                         show_error(response)
 
+                except requests.RequestException as error:
+                    st.error(f"Backend connection error: {error}")
+
                 except Exception as error:
-                    st.error(f"Could not connect to the backend: {error}")
+                    st.error(f"Login error: {error}")
 
     # REGISTER
     with register_tab:
@@ -305,8 +312,11 @@ def authentication_page():
                     else:
                         show_error(response)
 
+                except requests.RequestException as error:
+                    st.error(f"Backend connection error: {error}")
+
                 except Exception as error:
-                    st.error(f"Could not connect to the backend: {error}")
+                    st.error(f"Registration error: {error}")
 
 
 # --------------------------------------------------
@@ -321,8 +331,8 @@ def show_sidebar():
     )
 
     st.sidebar.markdown("---")
-
     st.sidebar.write(f"Welcome, **{st.session_state.username}**")
+
     pages = [
         "Dashboard",
         "Buses",
@@ -332,6 +342,9 @@ def show_sidebar():
         "Quietest Times",
         "Developer Key"
     ]
+
+    if st.session_state.page not in pages:
+        st.session_state.page = "Dashboard"
 
     selected_page = st.sidebar.radio(
         "Choose a page",
@@ -348,6 +361,7 @@ def show_sidebar():
         st.session_state.token = None
         st.session_state.username = ""
         st.session_state.page = "Dashboard"
+        st.session_state.new_developer_key = None
 
         st.rerun()
 
@@ -363,7 +377,6 @@ def dashboard_page():
 
     col1, col2, col3 = st.columns(3)
 
-    # BUS COUNT
     try:
         buses_response = get_buses()
         buses = get_data(buses_response)
@@ -377,7 +390,6 @@ def dashboard_page():
     except Exception:
         col1.metric("🚌 Total Buses", "N/A")
 
-    # REPORT COUNT
     try:
         reports_response = get_reports()
         reports = get_data(reports_response)
@@ -394,11 +406,9 @@ def dashboard_page():
     except Exception:
         col2.metric("📋 Crowd Reports", "N/A")
 
-    # HEATMAP STATUS
     col3.metric("📡 System Status", "ONLINE")
 
     st.markdown("---")
-
     st.subheader("Welcome to Bus Crowd Meter")
 
     st.write("""
@@ -454,7 +464,6 @@ def buses_page():
 def submit_report_page():
 
     st.title("📢 Submit Crowd Report")
-
     st.write("Help other passengers by reporting bus crowd levels.")
 
     try:
@@ -476,7 +485,9 @@ def submit_report_page():
         bus_options = {}
 
         for bus in bus_list:
+
             bus_id = bus.get("id") or bus.get("bus_id")
+
             bus_name = (
                 bus.get("name")
                 or bus.get("bus_number")
@@ -566,7 +577,6 @@ def reports_page():
 def heatmap_page():
 
     st.title("🌍 Crowd Heatmap")
-
     st.write("Explore crowd information collected by the system.")
 
     try:
@@ -583,7 +593,6 @@ def heatmap_page():
                     use_container_width=True,
                     hide_index=True
                 )
-
             else:
                 st.json(data)
 
@@ -598,7 +607,6 @@ def heatmap_page():
 def quietest_times_page():
 
     st.title("🕒 Quietest Travel Times")
-
     st.write("Discover the less crowded times to travel.")
 
     try:
@@ -624,72 +632,109 @@ def quietest_times_page():
 # DEVELOPER KEY
 # --------------------------------------------------
 
+
 def developer_key_page():
 
     st.title("🔑 Developer Key")
+    st.write("Generate and manage your developer access key.")
 
-    st.write("Developer access and API integration.")
+    token = st.session_state.get("token")
 
-    st.info("Use this section to manage your developer access.")
+    if not token:
+        st.warning("Please log in first.")
+        return
 
-    with st.container(border=True):
+    # GENERATE KEY
+    st.subheader("Generate Developer Key")
 
-        st.subheader("Developer Access")
+    if st.button("🔑 Generate Developer Key"):
 
-        developer_key = st.text_input(
-            "Enter Developer Key",
-            type="password",
-            placeholder="Enter your developer key..."
-        )
+        try:
+            response = generate_developer_key(token)
 
-        if st.button("Verify Developer Key"):
+            if response.status_code in [200, 201]:
 
-            if not developer_key:
-                st.error("Please enter your developer key.")
+                result = response.json()
+                key = result.get("developer_key")
+
+                if key:
+                    st.session_state.new_developer_key = key
+                    st.success("Developer key generated successfully!")
+                else:
+                    st.error("The server did not return a developer key.")
 
             else:
-                try:
-                    token = st.session_state.get("token")
+                show_error(response)
 
-                    if not token:
-                        st.error("Please log in first.")
+        except requests.RequestException as error:
+            st.error(f"Could not connect to backend: {error}")
 
+        except Exception as error:
+            st.error(f"Error generating key: {error}")
+
+    # DISPLAY GENERATED KEY
+    key = st.session_state.get("new_developer_key")
+
+    if key:
+        st.subheader("Your Developer Key")
+        st.code(key, language=None)
+
+        st.warning(
+            "Save this key somewhere safe. "
+            "The original key may only be shown when it is generated."
+        )
+
+    st.markdown("---")
+
+    # VERIFY KEY
+    st.subheader("Verify Developer Key")
+
+    developer_key = st.text_input(
+        "Enter Developer Key",
+        type="password",
+        placeholder="Enter your developer key..."
+    )
+
+    if st.button("Verify Developer Key"):
+
+        if not developer_key:
+            st.error("Please enter your developer key.")
+
+        else:
+            try:
+                response = verify_developer_key(
+                    developer_key,
+                    token
+                )
+
+                if response.status_code == 200:
+
+                    result = response.json()
+
+                    if result.get("valid"):
+                        st.success("Developer key verified successfully!")
                     else:
-                        response = verify_developer_key(
-                            developer_key,
-                            token
+                        st.error(
+                            result.get(
+                                "message",
+                                "Invalid developer key."
+                            )
                         )
 
-                        if response.status_code == 200:
-                            result = response.json()
+                else:
+                    show_error(response)
 
-                            if result.get("valid"):
-                                st.success(
-                                    "Developer key verified successfully! "
-                                    "Access granted."
-                                )
-                            else:
-                                st.error(
-                                    result.get(
-                                        "message",
-                                        "Invalid developer key."
-                                    )
-                                )
+            except requests.RequestException as error:
+                st.error(f"Backend connection error: {error}")
 
-                        else:
-                            st.error(
-                                f"Verification failed: {response.text}"
-                            )
-
-                except Exception as e:
-                    st.error(f"Backend connection error: {e}")
-
-
+            except Exception as error:
+                st.error(f"Verification error: {error}")
 
 
 # --------------------------------------------------
 # MAIN APPLICATION
-# ----------------------------------------------------
+# --------------------------------------------------
+
 def main():
 
     if not st.session_state.token:
@@ -714,9 +759,6 @@ def main():
 
         elif st.session_state.page == "Heatmap":
             heatmap_page()
-
-        elif st.session_state.page == "Quietest Times":
-            quietest_times_page()
 
         elif st.session_state.page == "Quietest Times":
             quietest_times_page()

@@ -20,6 +20,16 @@ app.include_router(reports.router)
 app.include_router(heatmap.router)
 app.include_router(developer_keys.router)
 
+print("\n========== DEVELOPER ROUTER DIAGNOSTIC ==========")
+
+for route in app.routes:
+    if "developer" in getattr(route, "path", ""):
+        print("Path:", route.path)
+        print("Methods:", getattr(route, "methods", None))
+
+print("=================================================\n")
+
+
 
 @app.get("/")
 def home():
